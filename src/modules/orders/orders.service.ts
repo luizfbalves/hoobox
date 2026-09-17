@@ -1,14 +1,18 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { CreateOrderDto } from "../dtos/create-order.dto.js";
+import {
+    ORDERS_REPOSITORY,
+    type OrdersRepository,
+} from "./orders.repository.js";
 
 @Injectable()
 export class OrdersService {
-    constructor() {}
+    constructor(
+        @Inject(ORDERS_REPOSITORY)
+        private readonly ordersRepository: OrdersRepository,
+    ) {}
 
-    public createOrder (props: CreateOrderDto) {
-        const {customerName, items} = props
-
-        console.log({customerName, items})
+    public createOrder(props: CreateOrderDto) {
+        return this.ordersRepository.createWithItems(props);
     }
-
 }

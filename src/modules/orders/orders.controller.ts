@@ -14,6 +14,9 @@ export class OrdersController {
 
   @Post()
   createOrder(@Body() body: CreateOrderDto) {
-    return this.ordersService.createOrder(body);
+    this.ordersService.createOrder(body);
+
+    return {status: 'success'}
+
   }
 }

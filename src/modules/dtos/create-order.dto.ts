@@ -7,6 +7,7 @@ import {
   IsNumber,
   IsPositive,
   IsString,
+  Max,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -22,6 +23,7 @@ class CreateOrderItemDto {
 
   @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()
+  @Max(21_474_836)
   price: number;
 }
 
