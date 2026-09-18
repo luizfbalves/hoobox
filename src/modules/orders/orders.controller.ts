@@ -1,22 +1,32 @@
-import { Body, Controller, Get, Post } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  Query,
+} from "@nestjs/common";
 import { CreateOrderDto } from "../dtos/create-order.dto.js";
+import { ListOrdersQueryDto } from "../dtos/list-orders-query.dto.js";
 import { OrdersService } from "./orders.service.js";
 
-@Controller('orders')
+@Controller("orders")
 export class OrdersController {
-
   constructor(private readonly ordersService: OrdersService) {}
 
   @Get()
-  getOrders() {
-    return 'Hello World';
+  listOrders(@Query() query: ListOrdersQueryDto) {
+    return this.ordersService.listOrders(query);
+  }
+
+  @Get(":id")
+  getOrder(@Param("id", ParseIntPipe) id: number) {
+    return this.ordersService.getOrderById(id);
   }
 
   @Post()
-  createOrder(@Body() body: CreateOrderDto) {
-    this.ordersService.createOrder(body);
-
-    return {status: 'success'}
-
+  async createOrder(@Body() body: CreateOrderDto) {
+    return this.ordersService.createOrder(body);
   }
 }

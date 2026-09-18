@@ -27,8 +27,9 @@ model Order {
   customer   Customer    @relation(fields: [customerId], references: [id])
   items      OrderItem[]
   totalCents Int         @map("total_cents")
-  status     OrderStatus @default(PENDING)
-  createdAt  DateTime    @default(now())
+  status        OrderStatus @default(PENDING)
+  failureReason String?     @map("failure_reason") @db.VarChar(255)
+  createdAt     DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
 
   @@index([status])
