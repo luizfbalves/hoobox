@@ -46,16 +46,29 @@ $ npm run start:prod
 
 ## Run tests
 
+Requisitos:
+
+- **Unitários:** `bun test` (sem Docker).
+- **E2e:** Docker em execução (Testcontainers sobe MySQL 8.4 + Redis 7). Primeira execução pode demorar (pull de imagens).
+- Ambiente limpo: `bun run prisma:generate` antes dos e2e (o `globalSetup` também roda generate + migrate).
+
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+bun run prisma:generate   # ou: npm run prisma:generate
+bun test                  # ou: npm test
+bun test:cov              # 100% nos módulos de pedidos alterados (ver vitest.config.ts)
+bun test:e2e              # Testcontainers + worker Bull (npm run test:e2e equivalente)
+bun run test:all          # unit + e2e
 ```
+
+Variáveis usadas só nos testes (definidas pelo setup e2e ou manualmente):
+
+- `ORDER_PROCESSING_DELAY_MS` — delay do worker (0 nos e2e rápidos; 3000 no teste POST→PENDING).
+- `ORDER_QUEUE_BACKOFF_MS` — backoff Bull (50 nos e2e).
+
+### Processamento de pedidos (fila)
+
+- **Estoque insuficiente** (`InsufficientStockError`): o repositório chama `markFailed` dentro de `processCreatedOrder`; o job Bull **conclui** sem novas tentativas.
+- **Falha simulada** (`ForcedProcessingError`, demo com `"fail"` no nome do cliente): o erro **propaga**; Bull **retenta** até `attempts`; na última falha, `OrderCreatedProcessor.onFailed` chama `markFailed`.
 
 ## Deployment
 
