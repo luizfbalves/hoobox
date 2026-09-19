@@ -11,6 +11,7 @@ import {
   ORDER_CREATED_JOB,
   ORDERS_QUEUE,
 } from "../../core/queue/queue.constants.js";
+import { buildOrderCreatedJobOptions } from "./order-queue-options.js";
 
 @Injectable()
 export class OrdersService {
@@ -26,12 +27,7 @@ export class OrdersService {
     await this.ordersQueue.add(
       ORDER_CREATED_JOB,
       { orderId: order.id },
-      {
-        jobId: `order-created-${order.id}`,
-        removeOnComplete: true,
-        attempts: 3,
-        backoff: { type: "exponential", delay: 1000 },
-      },
+      buildOrderCreatedJobOptions(order.id),
     );
 
     return { status: "ok" };

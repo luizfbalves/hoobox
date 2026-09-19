@@ -4,8 +4,10 @@ import { createRedisConnection } from './redis.connection.js';
 
 @Module({
   imports: [
-    BullModule.forRoot({
-      connection: createRedisConnection(),
+    BullModule.forRootAsync({
+      useFactory: () => ({
+        connection: createRedisConnection(),
+      }),
     }),
   ],
 })

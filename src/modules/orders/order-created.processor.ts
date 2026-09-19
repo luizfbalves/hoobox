@@ -9,11 +9,22 @@ import {
   ORDERS_REPOSITORY,
   type OrdersRepository,
 } from "./orders.repository.js";
+import { resolveProcessingDelayMs, sleep } from "./processing-delay.js";
 
 type OrderCreatedPayload = { orderId: number };
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+export function resolveFailureReason(
+  error: Error | undefined,
+  job: Job<OrderCreatedPayload>,
+): string {
+  const message = error?.message?.trim();
+  if (message) {
+    return message;
+  }
+  if (job.failedReason?.trim()) {
+    return job.failedReason.trim();
+  }
+  return "erro no processamento";
 }
 
 @Processor(ORDERS_QUEUE)
@@ -32,7 +43,7 @@ export class OrderCreatedProcessor extends WorkerHost {
 
     const { orderId } = job.data;
 
-    await sleep(1000 + Math.random() * 1000);
+    await sleep(resolveProcessingDelayMs());
 
     await this.ordersRepository.processCreatedOrder(orderId);
   }
@@ -53,11 +64,9 @@ export class OrderCreatedProcessor extends WorkerHost {
       return;
     }
 
-    const reason =
-      error?.message ??
-      job.failedReason ??
-      "erro no processamento";
-
-    await this.ordersRepository.markFailed(orderId, reason);
+    await this.ordersRepository.markFailed(
+      orderId,
+      resolveFailureReason(error, job),
+    );
   }
 }

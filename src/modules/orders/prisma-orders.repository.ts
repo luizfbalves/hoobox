@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from "@nestjs/common";
+import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import {
   OrderDetailRecord,
   OrderRecord,
@@ -12,11 +8,11 @@ import {
 } from "./orders.repository.js";
 
 import { CreateOrderDto } from "../dtos/create-order.dto.js";
+import { formatCents, toCents } from "../../core/utils/money.js";
 import {
-  formatCents,
-  MAX_CENTS,
-  toCents,
-} from "../../core/utils/money.js";
+  assertOrderTotalWithinLimit,
+  calculateOrderTotalCents,
+} from "./order-total.js";
 import { PrismaService } from "../../core/prisma/prisma.service.js";
 import { OrderStatus } from "../../generated/prisma/enums.js";
 import {
@@ -44,6 +40,8 @@ type OrderWithDetails = OrderWithCustomer & {
 
 @Injectable()
 export class PrismaOrdersRepository implements OrdersRepository {
+  private readonly logger = new Logger(PrismaOrdersRepository.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   async createWithItems(input: CreateOrderDto): Promise<OrderRecord> {
@@ -79,16 +77,13 @@ export class PrismaOrdersRepository implements OrdersRepository {
         );
       }
 
-      const totalCents = items.reduce(
-        (sum, item) => sum + item.quantity * item.priceCents,
-        0,
+      const totalCents = calculateOrderTotalCents(
+        input.items.map((item) => ({
+          quantity: item.quantity,
+          price: item.price,
+        })),
       );
-
-      if (totalCents > MAX_CENTS) {
-        throw new BadRequestException(
-          "Total do pedido excede o valor máximo permitido",
-        );
-      }
+      assertOrderTotalWithinLimit(totalCents);
 
       const order = await tx.order.create({
         data: {
@@ -152,7 +147,7 @@ export class PrismaOrdersRepository implements OrdersRepository {
   }
 
   async markFailed(orderId: number, reason: string): Promise<void> {
-    await this.prisma.order.updateMany({
+    const result = await this.prisma.order.updateMany({
       where: {
         id: orderId,
         status: OrderStatus.PENDING,
@@ -162,6 +157,11 @@ export class PrismaOrdersRepository implements OrdersRepository {
         failureReason: reason.slice(0, 255),
       },
     });
+    if (result.count === 0) {
+      this.logger.warn(
+        `markFailed sem efeito: pedido ${orderId} não está PENDING (motivo: ${reason.slice(0, 80)})`,
+      );
+    }
   }
 
   async processCreatedOrder(orderId: number): Promise<void> {
