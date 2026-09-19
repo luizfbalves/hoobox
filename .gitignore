@@ -21,6 +21,7 @@ lerna-debug.log*
 
 # Tests
 /coverage
+.testcontainers-state.json
 /.nyc_output
 
 # IDEs and editors
