@@ -1,0 +1,8 @@
+node_modules
+dist
+coverage
+.git
+.testcontainers-state.json
+*.md
+.env
+.env.*

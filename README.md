@@ -1,131 +1,101 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Hoobox — API de pedidos assíncronos
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+API NestJS que persiste pedidos como `PENDING`, enfileira processamento em **BullMQ + Redis** e atualiza status após debitar estoque. Contrato HTTP em [openapi.yaml](./openapi.yaml).
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Pré-requisitos
 
-## Description
+- **Docker** (Compose e testes e2e)
+- **Node.js 22+** e npm (desenvolvimento e testes unitários locais)
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Rodar com um comando (stack completa)
 
-## Project setup
+Sobe **API + MySQL 8.4 + Redis 7** (migrate, seed e API em modo produção):
 
 ```bash
-$ npm install
+npm run compose:up
+# equivalente: docker compose up --build
 ```
 
-## Compile and run the project
+- Health: `GET http://localhost:3333/`
+- Criar pedido: `POST http://localhost:3333/orders` (ver exemplos no OpenAPI)
+- Parar: `npm run compose:down`
+
+A fila usa **Redis** (não RabbitMQ). Jobs ficam na fila `orders`; falhas definitivas viram `FAILED` + `failureReason` no MySQL (sem fila DLQ separada).
+
+## Desenvolvimento local (opcional)
+
+1. Copie variáveis: `cp .env.example .env`
+2. Suba só infraestrutura ou use instâncias locais de MySQL/Redis.
+3. Com MySQL/Redis acessíveis em `localhost`:
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+npm install
+npm run prisma:generate
+npm run prisma:migrate
+npm run prisma:seed
+npm run start:dev
 ```
 
-## Run tests
-
-Requisitos:
-
-- **Unitários:** `bun test` (sem Docker).
-- **E2e:** Docker em execução (Testcontainers sobe MySQL 8.4 + Redis 7). Primeira execução pode demorar (pull de imagens).
-- Ambiente limpo: `bun run prisma:generate` antes dos e2e (o `globalSetup` também roda generate + migrate).
+Para subir **apenas** MySQL e Redis via Compose (API no host):
 
 ```bash
-bun run prisma:generate   # ou: npm run prisma:generate
-bun test                  # ou: npm test
-bun test:cov              # 100% nos módulos de pedidos alterados (ver vitest.config.ts)
-bun test:e2e              # Testcontainers + worker Bull (npm run test:e2e equivalente)
-bun run test:all          # unit + e2e
+docker compose up mysql redis
 ```
 
-Variáveis usadas só nos testes (definidas pelo setup e2e ou manualmente):
+## Testes
 
-- `ORDER_PROCESSING_DELAY_MS` — delay do worker (0 nos e2e rápidos; 3000 no teste POST→PENDING).
-- `ORDER_QUEUE_BACKOFF_MS` — backoff Bull (50 nos e2e).
+### Pirâmide
 
-### Processamento de pedidos (fila)
+| Camada | O que prova |
+|--------|-------------|
+| **Unitários** | Total do pedido (`order-total`), opções de retry/backoff Bull (`order-queue-options`), decisão de marcar `FAILED` só após esgotar tentativas (`order-created.processor` / `onFailed`). |
+| **E2e** | Nest + Prisma + Redis + worker **sem mock**: enfileiramento real (`order.created`, `attempts: 3`, backoff), `PENDING` após POST, `PROCESSED` com débito de estoque, falha de estoque **sem retry** (job removido após conclusão única; pedido `FAILED`), falha simulada com **3 tentativas** (`attemptsMade === 3`, `customerName` com `fail`). |
 
-- **Estoque insuficiente** (`InsufficientStockError`): o repositório chama `markFailed` dentro de `processCreatedOrder`; o job Bull **conclui** sem novas tentativas.
-- **Falha simulada** (`ForcedProcessingError`, demo com `"fail"` no nome do cliente): o erro **propaga**; Bull **retenta** até `attempts`; na última falha, `OrderCreatedProcessor.onFailed` chama `markFailed`.
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+Testcontainers (e2e) sobe MySQL/Redis automaticamente. Docker Compose é para rodar/demo manual da stack.
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+npm run prisma:generate
+npm test                    # unitários (sem Docker)
+npm run test:cov            # cobertura 100% nos módulos de lógica pura (ver vitest.config.ts)
+npm run test:e2e            # requer Docker em execução
+npm run test:all            # unit + e2e
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Variáveis usadas nos e2e (definidas em `test/global-setup.e2e.ts` / setup):
 
-## Observability
+- `ORDER_PROCESSING_DELAY_MS` — delay artificial do worker (ex.: 3000 no teste POST→`PENDING`)
+- `ORDER_QUEUE_BACKOFF_MS` — backoff entre retries Bull (50 nos e2e rápidos)
 
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
+### Comportamento de falha (referência)
 
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
+- **Estoque insuficiente:** `markFailed` dentro do repositório; job Bull **conclui** (1 tentativa).
+- **Nome com `fail`:** `ForcedProcessingError` propaga; Bull **retenta** (`attempts: 3`); na última falha, `onFailed` chama `markFailed`.
 
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
+## Decisões de arquitetura
 
-This project is already instrumented. Create a free account at [observe.nestjs.com](https://observe.nestjs.com), add an application, and paste the generated app key and secret into the `ObserveModule.forRoot()` call in `src/app.module.ts`.
+```text
+POST /orders → MySQL (PENDING) → Redis (job order.created)
+                                      ↓
+                              Worker (OrderCreatedProcessor)
+                                      ↓
+                         transação: lock, estoque, PROCESSED ou FAILED
+```
 
-The free plan needs no payment details and covers 300,000 events a month. You can also browse the [live demo](https://www.observe-demo.nestjs.com/dashboard) first - the whole dashboard over a busy service's data, with nothing to install.
+- **POST síncrono, processamento assíncrono:** resposta imediata `{ status: "ok" }`; status final via `GET /orders/:id`.
+- **Dinheiro em centavos** e limite de total (`order-total`) para evitar overflow e valores inválidos.
+- **Retry:** configurado no job (`attempts: 3`, backoff exponencial). Falhas de negócio tratadas no repo (estoque) não disparam retry.
+- **“DLQ”:** pedido `FAILED` + `failureReason` (até 255 chars) no banco, não uma segunda fila Redis.
+- **Demo de falha técnica:** substring `fail` no nome do cliente (case insensitive).
 
-## Resources
+## Com mais tempo
 
-Check out a few resources that may come in handy when working with NestJS:
+- Fila dead-letter dedicada (`orders-failed`) ou replay manual de jobs.
+- Idempotência explícita no worker após retries parciais.
+- Métricas/tracing de fila (lag, taxa de falha, tempo de processamento).
+- CI (GitHub Actions): lint, unit, e2e com Testcontainers.
+- Testes de carga no POST e no consumer.
+- Limpar dependências não usadas no código (`typeorm`, `amqplib`, etc.).
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observe](https://observe.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+## Licença
 
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+UNLICENSED (projeto privado).

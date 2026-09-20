@@ -4,7 +4,10 @@ import type { Queue, Worker } from 'bullmq';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { toCents } from '../src/core/utils/money.js';
-import { ORDERS_QUEUE } from '../src/core/queue/queue.constants.js';
+import {
+  ORDER_CREATED_JOB,
+  ORDERS_QUEUE,
+} from '../src/core/queue/queue.constants.js';
 import { OrderCreatedProcessor } from '../src/modules/orders/order-created.processor.js';
 import { createE2eApp } from './helpers/create-e2e-app.js';
 import {
@@ -40,6 +43,34 @@ describe('Orders (e2e)', () => {
   afterAll(async () => {
     await prisma.$disconnect();
     await app.close();
+  });
+
+  it('POST /orders enfileira job order.created com opções Bull no Redis', async () => {
+    await ordersWorker.pause();
+    try {
+      await request(app.getHttpServer())
+        .post('/orders')
+        .send({
+          customerName: 'Enfileira Test',
+          items: [{ productName: 'Camiseta', quantity: 1, price: 19.99 }],
+        })
+        .expect(201);
+
+      const order = await prisma.order.findFirstOrThrow();
+      const job = await ordersQueue.getJob(`order-created-${order.id}`);
+
+      expect(job).toBeDefined();
+      expect(job!.name).toBe(ORDER_CREATED_JOB);
+      expect(job!.data).toEqual({ orderId: order.id });
+      expect(job!.opts).toMatchObject({
+        jobId: `order-created-${order.id}`,
+        removeOnComplete: true,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 50 },
+      });
+    } finally {
+      await ordersWorker.resume();
+    }
   });
 
   it('POST /orders persiste PENDING antes do worker terminar', async () => {
@@ -82,6 +113,9 @@ describe('Orders (e2e)', () => {
     const order = await prisma.order.findFirstOrThrow();
     await waitForOrderStatus(app, order.id, 'PROCESSED');
 
+    // Job concluído com sucesso é removido (removeOnComplete); ausência = uma execução bem-sucedida, sem retries.
+    expect(await ordersQueue.getJob(`order-created-${order.id}`)).toBeUndefined();
+
     const product = await prisma.product.findFirstOrThrow({
       where: { name: 'Camiseta' },
     });
@@ -109,6 +143,9 @@ describe('Orders (e2e)', () => {
     await waitForOrderStatus(app, order.id, 'FAILED', {
       failureReason: 'estoque insuficiente',
     });
+
+    // Falha de negócio não relança erro: job completa em 1 tentativa e some da fila (removeOnComplete).
+    expect(await ordersQueue.getJob(`order-created-${order.id}`)).toBeUndefined();
   });
 
   it('falha simulada após retries Bull', async () => {

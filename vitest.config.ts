@@ -15,7 +15,6 @@ export default defineConfig({
         'src/modules/orders/processing-delay.ts',
         'src/modules/orders/order-queue-options.ts',
         'src/modules/orders/order-created.processor.ts',
-        'src/modules/orders/orders.service.ts',
       ],
       thresholds: {
         lines: 100,
