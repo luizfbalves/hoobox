@@ -1,6 +1,5 @@
 import type { Queue, Worker } from 'bullmq';
 
-/** Limpa a fila sem corrida com o worker Nest (evita "Missing key for job …"). */
 export async function resetOrdersQueue(
   queue: Queue,
   worker: Worker,

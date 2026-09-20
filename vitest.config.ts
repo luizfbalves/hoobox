@@ -1,7 +1,6 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  // Resolves path aliases from tsconfig.json (including `nest g library`).
   resolve: {
     tsconfigPaths: true,
   },
