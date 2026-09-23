@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
@@ -12,15 +13,18 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-class CreateOrderItemDto {
+export class CreateOrderItemDto {
+  @ApiProperty({ example: 'Camiseta' })
   @IsString()
   @IsNotEmpty()
   productName: string;
 
+  @ApiProperty({ example: 2, minimum: 1 })
   @IsInt()
   @Min(1)
   quantity: number;
 
+  @ApiProperty({ example: 19.99, description: 'Preço unitário, até 2 casas decimais' })
   @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()
   @Max(21_474_836)
@@ -28,10 +32,12 @@ class CreateOrderItemDto {
 }
 
 export class CreateOrderDto {
+  @ApiProperty({ example: 'Maria Silva', description: 'Contendo "fail" simula falha técnica no worker' })
   @IsString()
   @IsNotEmpty()
   customerName: string;
 
+  @ApiProperty({ type: [CreateOrderItemDto] })
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })
