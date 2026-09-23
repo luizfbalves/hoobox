@@ -191,6 +191,29 @@ describe('Orders (e2e)', () => {
     }
   });
 
+  it('GET /orders desempata createdAt igual por id desc (paginação determinística)', async () => {
+    const product = await prisma.product.findFirstOrThrow({ where: { name: 'Camiseta' } });
+    const customer = await prisma.customer.create({ data: { name: 'Empate' } });
+    const createdAt = new Date('2026-01-01T00:00:00.000Z');
+    const ids: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      const order = await prisma.order.create({
+        data: {
+          customerId: customer.id,
+          totalCents: 1999,
+          createdAt,
+          items: { create: [{ productId: product.id, quantity: 1, priceCents: 1999 }] },
+        },
+      });
+      ids.push(order.id);
+    }
+
+    const page1 = await api.get('/orders?page=1&limit=2').expect(200);
+    const page2 = await api.get('/orders?page=2&limit=2').expect(200);
+    const listed = [...page1.body.data, ...page2.body.data].map((o: { id: number }) => o.id);
+    expect(listed).toEqual([...ids].sort((a, b) => b - a));
+  });
+
   it('POSTs simultâneos do mesmo cliente novo criam um único cliente', async () => {
     await ordersWorker.pause();
     try {

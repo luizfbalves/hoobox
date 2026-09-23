@@ -118,7 +118,7 @@ export class PrismaOrdersRepository implements OrdersRepository {
       this.prisma.order.findMany({
         skip,
         take: limit,
-        orderBy: { createdAt: "desc" },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         include: {
           customer: true,
           items: { include: { product: true } },
@@ -150,9 +150,7 @@ export class PrismaOrdersRepository implements OrdersRepository {
       },
     });
     if (result.count === 0) {
-      this.logger.warn(
-        `markFailed sem efeito: pedido ${orderId} não está PENDING (motivo: ${reason.slice(0, 80)})`,
-      );
+      this.logger.warn({ msg: "order.mark_failed_noop", orderId, reason });
     }
   }
 
