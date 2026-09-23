@@ -6,6 +6,7 @@ import { ORDERS_QUEUE } from "../../core/queue/queue.constants.js";
 import { CreateOrderUseCase } from "./application/create-order.use-case.js";
 import { OrderQueries } from "./application/order-queries.js";
 import { ProcessOrderUseCase } from "./application/process-order.use-case.js";
+import { ReprocessOrderUseCase } from "./application/reprocess-order.use-case.js";
 import { ORDERS_REPOSITORY } from "./domain/orders.repository.js";
 import { OrdersController } from "./http/orders.controller.js";
 import { OrderCreatedProcessor } from "./infra/order-created.processor.js";
@@ -19,6 +20,7 @@ import { PrismaOrdersRepository } from "./infra/prisma-orders.repository.js";
     CreateOrderUseCase,
     OrderQueries,
     ProcessOrderUseCase,
+    ReprocessOrderUseCase,
     OrderCreatedProcessor,
     OutboxRelay,
     { provide: ORDERS_REPOSITORY, useClass: PrismaOrdersRepository },

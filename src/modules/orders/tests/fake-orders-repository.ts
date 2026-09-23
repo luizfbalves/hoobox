@@ -13,6 +13,7 @@ export function makeFakeOrdersRepository(
       .mockResolvedValue({ id: 1, status: OrderStatus.PENDING, customerName: 'Ana' }),
     reserveStockAndConfirm: vi.fn().mockResolvedValue('PROCESSED'),
     markFailed: vi.fn().mockResolvedValue(undefined),
+    requeueFailed: vi.fn().mockResolvedValue('REQUEUED'),
     ...overrides,
   };
 }

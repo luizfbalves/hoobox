@@ -55,6 +55,8 @@ export type OrderForProcessing = {
 
 export type StockReservationResult = "PROCESSED" | "INSUFFICIENT_STOCK" | "NOT_PENDING";
 
+export type RequeueResult = "REQUEUED" | "NOT_FAILED" | "NOT_FOUND";
+
 export interface OrdersRepository {
   createPending(draft: NewOrderDraft, buildEvents: BuildEvents): Promise<OrderRecord>;
   findById(id: number): Promise<OrderDetailRecord>;
@@ -62,4 +64,5 @@ export interface OrdersRepository {
   findForProcessing(orderId: number): Promise<OrderForProcessing | null>;
   reserveStockAndConfirm(orderId: number): Promise<StockReservationResult>;
   markFailed(orderId: number, reason: string): Promise<void>;
+  requeueFailed(orderId: number, buildEvents: BuildEvents): Promise<RequeueResult>;
 }

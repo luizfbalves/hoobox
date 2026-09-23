@@ -8,6 +8,7 @@ import {
   OrderSummaryRecord,
   PaginatedOrders,
   type OrderForProcessing,
+  type RequeueResult,
   type StockReservationResult,
 } from "../domain/orders.repository.js";
 
@@ -210,6 +211,32 @@ export class PrismaOrdersRepository implements OrdersRepository {
       }
       throw error;
     }
+  }
+
+  async requeueFailed(orderId: number, buildEvents: BuildEvents): Promise<RequeueResult> {
+    return this.prisma.$transaction(async (tx) => {
+      const exists = await tx.order.findUnique({
+        where: { id: orderId },
+        select: { id: true },
+      });
+      if (!exists) {
+        return "NOT_FOUND" as const;
+      }
+
+      // UPDATE condicional: sob pedidos simultâneos, só um vence a transição FAILED -> PENDING.
+      const updated = await tx.order.updateMany({
+        where: { id: orderId, status: OrderStatus.FAILED },
+        data: { status: OrderStatus.PENDING, failureReason: null },
+      });
+      if (updated.count === 0) {
+        return "NOT_FAILED" as const;
+      }
+
+      await tx.outboxEvent.createMany({
+        data: buildEvents(orderId).map(toOutboxRow),
+      });
+      return "REQUEUED" as const;
+    });
   }
 
   private toOrderRecord(order: {
