@@ -2,8 +2,10 @@ import { Job } from 'bullmq';
 import { ORDER_CREATED_JOB } from '../../../core/queue/queue.constants.js';
 import type { OrdersRepository } from '../domain/orders.repository.js';
 import { OrderCreatedProcessor } from '../infra/order-created.processor.js';
+import type { OrderCreatedPayload } from '../domain/order-created.event.js';
+import { makeFakeOrdersRepository } from './fake-orders-repository.js';
 
-type OrderCreatedJob = Job<{ orderId: number }>;
+type OrderCreatedJob = Job<OrderCreatedPayload>;
 
 function makeJob(partial: {
   name: string;
@@ -14,7 +16,7 @@ function makeJob(partial: {
 }): OrderCreatedJob {
   return {
     name: partial.name,
-    data: (partial.data ?? {}) as { orderId: number },
+    data: (partial.data ?? {}) as OrderCreatedPayload,
     opts: partial.opts ?? { attempts: 3 },
     attemptsMade: partial.attemptsMade ?? 0,
     failedReason: partial.failedReason,
@@ -36,13 +38,7 @@ describe('OrderCreatedProcessor', () => {
     processCreatedOrder = vi
       .fn<OrdersRepository['processCreatedOrder']>()
       .mockResolvedValue(undefined);
-    repository = {
-      createWithItems: vi.fn(),
-      findById: vi.fn(),
-      findMany: vi.fn(),
-      markFailed,
-      processCreatedOrder,
-    } satisfies OrdersRepository;
+    repository = makeFakeOrdersRepository({ markFailed, processCreatedOrder });
     processor = new OrderCreatedProcessor(repository);
   });
 

@@ -2,31 +2,39 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseIntPipe,
   Post,
   Query,
 } from "@nestjs/common";
+import { CorrelationId } from "../../../core/logging/correlation-id.decorator.js";
+import { CreateOrderUseCase } from "../application/create-order.use-case.js";
+import { OrderQueries } from "../application/order-queries.js";
 import { CreateOrderDto } from "./dtos/create-order.dto.js";
 import { ListOrdersQueryDto } from "./dtos/list-orders-query.dto.js";
-import { OrdersService } from "../application/orders.service.js";
 
 @Controller("orders")
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(
+    private readonly createOrder: CreateOrderUseCase,
+    private readonly queries: OrderQueries,
+  ) {}
 
   @Get()
-  listOrders(@Query() query: ListOrdersQueryDto) {
-    return this.ordersService.listOrders(query);
+  list(@Query() query: ListOrdersQueryDto) {
+    return this.queries.list(query.page, query.limit);
   }
 
   @Get(":id")
-  getOrder(@Param("id", ParseIntPipe) id: number) {
-    return this.ordersService.getOrderById(id);
+  get(@Param("id", ParseIntPipe) id: number) {
+    return this.queries.getById(id);
   }
 
   @Post()
-  async createOrder(@Body() body: CreateOrderDto) {
-    return this.ordersService.createOrder(body);
+  @HttpCode(HttpStatus.ACCEPTED)
+  create(@Body() body: CreateOrderDto, @CorrelationId() correlationId: string) {
+    return this.createOrder.execute(body, correlationId);
   }
 }

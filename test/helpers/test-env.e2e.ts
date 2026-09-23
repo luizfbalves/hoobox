@@ -42,3 +42,4 @@ process.env.REDIS_PORT = String(state.redisPort);
 process.env.ORDER_PROCESSING_DELAY_MS = state.orderProcessingDelayMs;
 process.env.ORDER_QUEUE_BACKOFF_MS = state.orderQueueBackoffMs;
 process.env.LOG_LEVEL = 'silent';
+process.env.OUTBOX_POLL_MS = '50';

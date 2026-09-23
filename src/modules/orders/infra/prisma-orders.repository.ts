@@ -1,5 +1,7 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import {
+  BuildEvents,
+  NewOrderDraft,
   OrderDetailRecord,
   OrderRecord,
   OrdersRepository,
@@ -7,12 +9,8 @@ import {
   PaginatedOrders,
 } from "../domain/orders.repository.js";
 
-import { CreateOrderDto } from "../http/dtos/create-order.dto.js";
-import { formatCents, toCents } from "../../../core/utils/money.js";
-import {
-  assertOrderTotalWithinLimit,
-  calculateOrderTotalCents,
-} from "../domain/order-total.js";
+import { toOutboxRow } from "../../../core/outbox/domain-event.js";
+import { formatCents } from "../../../core/utils/money.js";
 import { PrismaService } from "../../../core/prisma/prisma.service.js";
 import { OrderStatus } from "../../../generated/prisma/enums.js";
 import {
@@ -26,6 +24,7 @@ type OrderWithCustomer = {
   totalCents: number;
   status: OrderStatus;
   failureReason: string | null;
+  correlationId: string | null;
   createdAt: Date;
   customer: { name: string };
 };
@@ -44,31 +43,22 @@ export class PrismaOrdersRepository implements OrdersRepository {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async createWithItems(input: CreateOrderDto): Promise<OrderRecord> {
-    const items = input.items.map((item) => ({
-      productName: item.productName,
-      quantity: item.quantity,
-      priceCents: toCents(item.price),
-    }));
-
+  async createPending(draft: NewOrderDraft, buildEvents: BuildEvents): Promise<OrderRecord> {
     return this.prisma.$transaction(async (tx) => {
-      let customer = await tx.customer.findFirst({
-        where: { name: input.customerName },
+      // INSERT ... ON DUPLICATE KEY: dois POSTs simultâneos do mesmo cliente novo não colidem no UNIQUE.
+      await tx.$executeRaw`
+        INSERT INTO customers (name) VALUES (${draft.customerName})
+        ON DUPLICATE KEY UPDATE name = name
+      `;
+      const customer = await tx.customer.findUniqueOrThrow({
+        where: { name: draft.customerName },
       });
-      if (!customer) {
-        customer = await tx.customer.create({
-          data: { name: input.customerName },
-        });
-      }
 
-      const productNames = [...new Set(items.map((item) => item.productName))];
+      const productNames = [...new Set(draft.items.map((item) => item.productName))];
       const products = await tx.product.findMany({
         where: { name: { in: productNames } },
       });
-
-      const productByName = new Map(
-        products.map((product) => [product.name, product]),
-      );
+      const productByName = new Map(products.map((product) => [product.name, product]));
 
       const missing = productNames.filter((name) => !productByName.has(name));
       if (missing.length > 0) {
@@ -77,26 +67,27 @@ export class PrismaOrdersRepository implements OrdersRepository {
         );
       }
 
-      const totalCents = calculateOrderTotalCents(
-        input.items.map((item) => ({
+      // Itens ordenados por productId: a checagem de FK trava produtos na mesma ordem
+      // que reserveStockAndConfirm, evitando deadlock entre criação e reserva.
+      const items = draft.items
+        .map((item) => ({
+          productId: productByName.get(item.productName)!.id,
           quantity: item.quantity,
-          price: item.price,
-        })),
-      );
-      assertOrderTotalWithinLimit(totalCents);
+          priceCents: item.priceCents,
+        }))
+        .sort((a, b) => a.productId - b.productId);
 
       const order = await tx.order.create({
         data: {
           customerId: customer.id,
-          totalCents,
-          items: {
-            create: items.map((item) => ({
-              productId: productByName.get(item.productName)!.id,
-              quantity: item.quantity,
-              priceCents: item.priceCents,
-            })),
-          },
+          totalCents: draft.totalCents,
+          correlationId: draft.correlationId,
+          items: { create: items },
         },
+      });
+
+      await tx.outboxEvent.createMany({
+        data: buildEvents(order.id).map(toOutboxRow),
       });
 
       return this.toOrderRecord(order);
@@ -248,6 +239,7 @@ export class PrismaOrdersRepository implements OrdersRepository {
       ...this.toOrderRecord(order),
       customerName: order.customer.name,
       failureReason: order.failureReason,
+      correlationId: order.correlationId,
       createdAt: order.createdAt,
     };
   }

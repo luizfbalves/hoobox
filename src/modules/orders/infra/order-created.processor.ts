@@ -10,8 +10,7 @@ import {
   type OrdersRepository,
 } from "../domain/orders.repository.js";
 import { resolveProcessingDelayMs, sleep } from "./processing-delay.js";
-
-type OrderCreatedPayload = { orderId: number };
+import type { OrderCreatedPayload } from "../domain/order-created.event.js";
 
 export function resolveFailureReason(
   error: Error | undefined,

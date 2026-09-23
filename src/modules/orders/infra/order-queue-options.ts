@@ -1,21 +1,15 @@
 import type { JobsOptions } from 'bullmq';
+import { readNonNegativeNumberEnv } from '../../../core/utils/env.js';
 
-function resolveQueueBackoffDelayMs(): number {
-  const fromEnv = process.env.ORDER_QUEUE_BACKOFF_MS;
-  if (fromEnv !== undefined && fromEnv !== '') {
-    const parsed = Number(fromEnv);
-    if (!Number.isNaN(parsed) && parsed >= 0) {
-      return parsed;
-    }
-  }
-  return 1000;
-}
-
-export function buildOrderCreatedJobOptions(orderId: number): JobsOptions {
+// jobId fixo por evento do outbox: republicar após crash do relay não duplica o job.
+export function buildOrderCreatedJobOptions(outboxId: bigint): JobsOptions {
   return {
-    jobId: `order-created-${orderId}`,
+    jobId: `outbox-${outboxId}`,
     removeOnComplete: true,
     attempts: 3,
-    backoff: { type: 'exponential', delay: resolveQueueBackoffDelayMs() },
+    backoff: {
+      type: 'exponential',
+      delay: readNonNegativeNumberEnv('ORDER_QUEUE_BACKOFF_MS', 1000),
+    },
   };
 }
