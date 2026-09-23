@@ -54,11 +54,18 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
     clearInterval(this.timer);
   }
 
-  async tick(): Promise<number> {
+  tick(): Promise<number> {
     if (this.running) {
-      return 0;
+      return Promise.resolve(0);
     }
     this.running = true;
+    return this.runBatch();
+  }
+
+  // Primeira falha interrompe o lote: com o Redis fora, cada publicação pode levar até
+  // OUTBOX_PUBLISH_TIMEOUT_MS e seguir adiante estouraria o timeout da transação,
+  // desfazendo os attempts já registrados. Os demais eventos ficam para o próximo tick.
+  private async runBatch(): Promise<number> {
     try {
       return await this.store.withPendingBatch(OUTBOX_BATCH_SIZE, async (batch) => {
         let published = 0;
@@ -83,7 +90,6 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
             });
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            await batch.markFailed(event.id, message);
             this.logger.warn({
               msg: 'outbox.publish_failed',
               outboxId: String(event.id),
@@ -91,6 +97,16 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
               correlationId,
               error: message,
             });
+            try {
+              await batch.markFailed(event.id, message);
+            } catch (markError) {
+              this.logger.error({
+                msg: 'outbox.mark_failed_error',
+                outboxId: String(event.id),
+                error: markError instanceof Error ? markError.message : String(markError),
+              });
+            }
+            break;
           }
         }
         return published;

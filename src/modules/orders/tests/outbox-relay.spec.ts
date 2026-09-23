@@ -1,3 +1,4 @@
+import type { Logger } from '@nestjs/common';
 import type { Queue } from 'bullmq';
 import type {
   OutboxStore,
@@ -49,18 +50,45 @@ describe('OutboxRelay.tick', () => {
     expect(published).toEqual([1n, 2n]);
   });
 
-  it('falha ao publicar mantém o evento pendente, registra o erro e segue o lote', async () => {
+  it('falha ao publicar registra o erro e interrompe o lote, deixando os seguintes pendentes', async () => {
     const { store, published, failed } = makeStore([event(1), event(2)]);
-    const add = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('redis indisponível'))
-      .mockResolvedValueOnce(undefined);
+    const add = vi.fn().mockRejectedValueOnce(new Error('redis indisponível'));
     const relay = new OutboxRelay(store, { add } as unknown as Queue);
 
-    await expect(relay.tick()).resolves.toBe(1);
+    await expect(relay.tick()).resolves.toBe(0);
 
     expect(failed).toEqual([{ id: 1n, error: 'redis indisponível' }]);
-    expect(published).toEqual([2n]);
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(published).toEqual([]);
+  });
+
+  it('markFailed que lança não derruba o tick e nada depois dele é tentado', async () => {
+    const markFailed = vi.fn().mockRejectedValue(new Error('Transaction already closed'));
+    const markPublished = vi.fn();
+    const store: OutboxStore = {
+      withPendingBatch: vi.fn(async (_limit: number, handler) =>
+        handler({ events: [event(1), event(2)], markPublished, markFailed }),
+      ),
+    };
+    const add = vi.fn().mockRejectedValue(new Error('redis indisponível'));
+    const relay = new OutboxRelay(store, { add } as unknown as Queue);
+    const logError = vi
+      .spyOn((relay as unknown as { logger: Logger }).logger, 'error')
+      .mockImplementation(() => {});
+
+    await expect(relay.tick()).resolves.toBe(0);
+
+    expect(logError).toHaveBeenCalledWith({
+      msg: 'outbox.mark_failed_error',
+      outboxId: '1',
+      error: 'Transaction already closed',
+    });
+    expect(logError).not.toHaveBeenCalledWith(
+      expect.objectContaining({ msg: 'outbox.tick_failed' }),
+    );
+    expect(markFailed).toHaveBeenCalledTimes(1);
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(markPublished).not.toHaveBeenCalled();
   });
 
   it('não sobrepõe execuções', async () => {
@@ -91,20 +119,18 @@ describe('OutboxRelay.tick', () => {
     await expect(relay.tick()).resolves.toBe(0);
   });
 
-  it('publish que nunca resolve estoura timeout, marca falha e segue o lote', async () => {
+  it('publish que nunca resolve estoura timeout, marca falha e interrompe o lote', async () => {
     process.env.OUTBOX_PUBLISH_TIMEOUT_MS = '20';
     try {
       const { store, published, failed } = makeStore([event(1), event(2)]);
-      const add = vi
-        .fn()
-        .mockImplementationOnce(() => new Promise(() => {}))
-        .mockResolvedValueOnce(undefined);
+      const add = vi.fn().mockImplementationOnce(() => new Promise(() => {}));
       const relay = new OutboxRelay(store, { add } as unknown as Queue);
 
-      await expect(relay.tick()).resolves.toBe(1);
+      await expect(relay.tick()).resolves.toBe(0);
 
       expect(failed).toEqual([{ id: 1n, error: 'publish timeout after 20ms' }]);
-      expect(published).toEqual([2n]);
+      expect(add).toHaveBeenCalledTimes(1);
+      expect(published).toEqual([]);
     } finally {
       delete process.env.OUTBOX_PUBLISH_TIMEOUT_MS;
     }
