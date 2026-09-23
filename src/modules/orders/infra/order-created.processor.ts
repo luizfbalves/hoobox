@@ -13,9 +13,6 @@ import {
 import type { OrderCreatedPayload } from "../domain/order-created.event.js";
 import { resolveProcessingDelayMs, sleep } from "./processing-delay.js";
 
-// Tipo estrutural (não a classe) na assinatura do construtor: evita o helper
-// ternário que o TS emite para emitDecoratorMetadata em parâmetros tipados por
-// classe concreta, o que deixaria um branch de cobertura inatingível em testes.
 type OrderProcessor = Pick<ProcessOrderUseCase, "execute" | "fail">;
 
 export function resolveFailureReason(
@@ -90,6 +87,15 @@ export class OrderCreatedProcessor extends WorkerHost {
       return;
     }
 
-    await this.processOrder.fail(orderId, reason, ctx);
+    try {
+      await this.processOrder.fail(orderId, reason, ctx);
+    } catch (markError) {
+      this.logger.error({
+        msg: "order.mark_failed_error",
+        orderId,
+        error: markError instanceof Error ? markError.message : String(markError),
+        ...ctx,
+      });
+    }
   }
 }

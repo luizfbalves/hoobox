@@ -4,9 +4,7 @@ import bcrypt from 'bcryptjs';
 import { PrismaService } from '../../core/prisma/prisma.service.js';
 import type { JwtPayload } from './auth.types.js';
 
-// Compara contra um hash fictício quando o usuário não existe: o tempo de resposta
-// não revela quais usernames existem.
-const DUMMY_HASH = bcrypt.hashSync('timing-safe-dummy', 10);
+const DUMMY_HASH = '$2b$10$td2/MqiDmHTmLG1YeWDTGeIX4mYTou4SdJXV6vWFsep7Vz2XStdOq';
 
 @Injectable()
 export class AuthService {

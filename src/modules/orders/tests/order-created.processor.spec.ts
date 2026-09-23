@@ -1,3 +1,4 @@
+import type { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { ORDER_CREATED_JOB } from '../../../core/queue/queue.constants.js';
 import type { ProcessOrderUseCase } from '../application/process-order.use-case.js';
@@ -130,6 +131,27 @@ describe('OrderCreatedProcessor', () => {
         new Error('x'),
       );
       expect(fail).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['Error', new Error('db fora'), 'db fora'],
+      ['valor não-Error', 'conexão perdida', 'conexão perdida'],
+    ])('não rejeita quando marcar FAILED lança (%s): loga e segue', async (_label, thrown, logged) => {
+      fail.mockRejectedValueOnce(thrown);
+      const logError = vi
+        .spyOn((processor as unknown as { logger: Logger }).logger, 'error')
+        .mockImplementation(() => {});
+
+      await expect(
+        processor.onFailed(
+          makeJob({ name: ORDER_CREATED_JOB, data: { orderId: 4 }, attemptsMade: 3 }),
+          new Error('x'),
+        ),
+      ).resolves.toBeUndefined();
+
+      expect(logError).toHaveBeenCalledWith(
+        expect.objectContaining({ msg: 'order.mark_failed_error', orderId: 4, error: logged }),
+      );
     });
   });
 

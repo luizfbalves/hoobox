@@ -9,10 +9,12 @@ import { InjectQueue } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import { OUTBOX_STORE, type OutboxStore } from '../../../core/outbox/outbox.store.js';
 import { ORDERS_QUEUE } from '../../../core/queue/queue.constants.js';
-import { readNonNegativeNumberEnv } from '../../../core/utils/env.js';
+import { readPositiveNumberEnv } from '../../../core/utils/env.js';
 import { buildOrderCreatedJobOptions } from './order-queue-options.js';
 
 const OUTBOX_BATCH_SIZE = 50;
+
+const OUTBOX_BATCH_BUDGET_MS = 5_000;
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -32,9 +34,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-// Publica eventos do outbox no BullMQ (at-least-once). O jobId deduplica enquanto o job
-// ainda está no Redis; depois de concluído (removeOnComplete), duplicatas são absorvidas
-// pela guarda PENDING/lock do worker.
 @Injectable()
 export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(OutboxRelay.name);
@@ -48,11 +47,10 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
   ) {}
 
   onApplicationBootstrap(): void {
-    const intervalMs = readNonNegativeNumberEnv('OUTBOX_POLL_MS', 500);
+    const intervalMs = readPositiveNumberEnv('OUTBOX_POLL_MS', 500);
     this.timer = setInterval(() => void this.tick(), intervalMs);
   }
 
-  // Espera o tick em andamento para não fechar Prisma/fila no meio de um lote.
   async onModuleDestroy(): Promise<void> {
     clearInterval(this.timer);
     await this.inFlight;
@@ -67,14 +65,17 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
     return this.inFlight;
   }
 
-  // Primeira falha interrompe o lote: com o Redis fora, cada publicação pode levar até
-  // OUTBOX_PUBLISH_TIMEOUT_MS e seguir adiante estouraria o timeout da transação,
-  // desfazendo os attempts já registrados. Os demais eventos ficam para o próximo tick.
   private async runBatch(): Promise<number> {
+    const publishTimeoutMs = readPositiveNumberEnv('OUTBOX_PUBLISH_TIMEOUT_MS', 5000);
     try {
       return await this.store.withPendingBatch(OUTBOX_BATCH_SIZE, async (batch) => {
+        const deadline = Date.now() + OUTBOX_BATCH_BUDGET_MS;
         let published = 0;
         for (const event of batch.events) {
+          if (Date.now() > deadline) {
+            break;
+          }
+          const outboxId = String(event.id);
           const correlationId = (event.payload as { correlationId?: string })?.correlationId;
           try {
             await withTimeout(
@@ -83,21 +84,13 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
                 event.payload,
                 buildOrderCreatedJobOptions(event.id),
               ),
-              readNonNegativeNumberEnv('OUTBOX_PUBLISH_TIMEOUT_MS', 5000),
+              publishTimeoutMs,
             );
-            await batch.markPublished(event.id);
-            published++;
-            this.logger.log({
-              msg: 'outbox.published',
-              outboxId: String(event.id),
-              eventType: event.eventType,
-              correlationId,
-            });
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             this.logger.warn({
               msg: 'outbox.publish_failed',
-              outboxId: String(event.id),
+              outboxId,
               attempts: event.attempts + 1,
               correlationId,
               error: message,
@@ -107,12 +100,31 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
             } catch (markError) {
               this.logger.error({
                 msg: 'outbox.mark_failed_error',
-                outboxId: String(event.id),
+                outboxId,
                 error: markError instanceof Error ? markError.message : String(markError),
               });
             }
             break;
           }
+
+          try {
+            await batch.markPublished(event.id);
+          } catch (markError) {
+            this.logger.error({
+              msg: 'outbox.mark_published_error',
+              outboxId,
+              correlationId,
+              error: markError instanceof Error ? markError.message : String(markError),
+            });
+            break;
+          }
+          published++;
+          this.logger.log({
+            msg: 'outbox.published',
+            outboxId,
+            eventType: event.eventType,
+            correlationId,
+          });
         }
         return published;
       });

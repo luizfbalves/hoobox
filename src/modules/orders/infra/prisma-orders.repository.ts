@@ -46,7 +46,6 @@ export class PrismaOrdersRepository implements OrdersRepository {
 
   async createPending(draft: NewOrderDraft, buildEvents: BuildEvents): Promise<OrderRecord> {
     return this.prisma.$transaction(async (tx) => {
-      // INSERT ... ON DUPLICATE KEY: dois POSTs simultâneos do mesmo cliente novo não colidem no UNIQUE.
       await tx.$executeRaw`
         INSERT INTO customers (name) VALUES (${draft.customerName})
         ON DUPLICATE KEY UPDATE name = name
@@ -68,8 +67,6 @@ export class PrismaOrdersRepository implements OrdersRepository {
         );
       }
 
-      // Itens ordenados por productId: a checagem de FK trava produtos na mesma ordem
-      // que reserveStockAndConfirm, evitando deadlock entre criação e reserva.
       const items = draft.items
         .map((item) => ({
           productId: productByName.get(item.productName)!.id,
@@ -164,8 +161,6 @@ export class PrismaOrdersRepository implements OrdersRepository {
       : null;
   }
 
-  // Estratégia: lock da linha do pedido (idempotência em reentrega) + UPDATE atômico
-  // condicional por produto (nunca negativa, sem read-modify-write), em ordem de productId.
   async reserveStockAndConfirm(orderId: number): Promise<StockReservationResult> {
     try {
       return await this.prisma.$transaction(
@@ -203,7 +198,6 @@ export class PrismaOrdersRepository implements OrdersRepository {
         { maxWait: 10_000, timeout: 10_000 },
       );
     } catch (error) {
-      // Rollback já desfez decrementos parciais de outros produtos do pedido.
       if (error instanceof InsufficientStockError) {
         return "INSUFFICIENT_STOCK";
       }
@@ -221,7 +215,6 @@ export class PrismaOrdersRepository implements OrdersRepository {
         return "NOT_FOUND" as const;
       }
 
-      // UPDATE condicional: sob pedidos simultâneos, só um vence a transição FAILED -> PENDING.
       const updated = await tx.order.updateMany({
         where: { id: orderId, status: OrderStatus.FAILED },
         data: { status: OrderStatus.PENDING, failureReason: null },

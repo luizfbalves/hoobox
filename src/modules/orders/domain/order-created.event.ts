@@ -1,6 +1,7 @@
 import type { DomainEvent } from '../../../core/outbox/domain-event.js';
+import { ORDER_CREATED_JOB } from '../../../core/queue/queue.constants.js';
 
-export const ORDER_CREATED_EVENT = 'order.created';
+export const ORDER_CREATED_EVENT = ORDER_CREATED_JOB;
 
 export type OrderCreatedPayload = { orderId: number; correlationId: string };
 

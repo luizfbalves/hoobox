@@ -10,7 +10,6 @@ export type NewOrderDraft = {
   items: Array<{ productName: string; quantity: number; priceCents: number }>;
 };
 
-// Eventos dependem do id gerado no INSERT; o repositório chama dentro da transação.
 export type BuildEvents = (orderId: number) => DomainEvent[];
 
 export type OrderRecord = {

@@ -10,9 +10,6 @@ import type { UserRole } from '../../generated/prisma/enums.js';
 import type { AuthUser } from './auth.types.js';
 import { ROLES_KEY } from './roles.decorator.js';
 
-// Tipo estrutural (não a classe) na assinatura do construtor: evita o helper
-// ternário que o TS emite para emitDecoratorMetadata em parâmetros tipados por
-// classe concreta, o que deixaria um branch de cobertura inatingível em testes.
 type ReflectorLike = Pick<Reflector, 'getAllAndOverride'>;
 
 @Injectable()

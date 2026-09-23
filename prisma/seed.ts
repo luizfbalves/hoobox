@@ -34,7 +34,6 @@ async function main() {
   });
 
   try {
-    // update vazio: reiniciar o container não reseta estoque já consumido
     for (const product of products) {
       await prisma.product.upsert({
         where: { name: product.name },

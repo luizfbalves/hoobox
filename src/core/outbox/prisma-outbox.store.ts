@@ -18,10 +18,6 @@ type RawOutboxRow = {
 export class PrismaOutboxStore implements OutboxStore {
   constructor(private readonly prisma: PrismaService) {}
 
-  // SKIP LOCKED: várias réplicas do relay pegam lotes disjuntos sem publicar em dobro.
-  // READ COMMITTED: sob REPEATABLE READ o SELECT ... FOR UPDATE também trava gaps do índice
-  // (published_at, id), e o INSERT do outbox em POST /orders esperaria o lote inteiro
-  // (que inclui I/O no Redis). Em RC só as linhas lidas ficam travadas.
   withPendingBatch<T>(
     limit: number,
     handler: (batch: OutboxBatch) => Promise<T>,

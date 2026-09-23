@@ -130,7 +130,6 @@ describe('Orders (e2e)', () => {
     const outbox = await prisma.outboxEvent.findFirstOrThrow({
       where: { aggregateId: res.body.id },
     });
-    // removeOnComplete: ausência do job = uma execução bem-sucedida, sem retries.
     expect(await ordersQueue.getJob(`outbox-${outbox.id}`)).toBeUndefined();
 
     const product = await prisma.product.findUniqueOrThrow({ where: { name: 'Camiseta' } });

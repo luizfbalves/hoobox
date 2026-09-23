@@ -36,7 +36,6 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     try {
-      // algorithms fixo: rejeita alg "none" e troca de algoritmo.
       const payload = await this.jwt.verifyAsync<JwtPayload>(token, {
         algorithms: ['HS256'],
       });

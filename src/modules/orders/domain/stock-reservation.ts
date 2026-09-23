@@ -1,5 +1,3 @@
-// Ordenar por productId garante que toda transação trava produtos na mesma ordem,
-// eliminando deadlock entre pedidos que compartilham produtos.
 export function aggregateQuantitiesByProduct(
   items: Array<{ productId: number; quantity: number }>,
 ): Array<[productId: number, quantity: number]> {

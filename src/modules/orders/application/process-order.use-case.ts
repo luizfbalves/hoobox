@@ -34,7 +34,6 @@ export class ProcessOrderUseCase {
       return 'SKIPPED';
     }
 
-    // Falha técnica: propaga para o BullMQ aplicar retry/backoff.
     if (shouldSimulateFailure(order.customerName)) {
       throw new ForcedProcessingError();
     }
@@ -47,7 +46,6 @@ export class ProcessOrderUseCase {
     }
 
     if (result === 'INSUFFICIENT_STOCK') {
-      // Falha de negócio: retentar não muda o resultado.
       await this.orders.markFailed(orderId, INSUFFICIENT_STOCK_REASON);
       this.logger.warn({ msg: 'order.stock_insufficient', orderId, ...ctx });
       return 'FAILED';

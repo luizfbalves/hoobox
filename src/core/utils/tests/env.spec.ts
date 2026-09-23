@@ -1,13 +1,15 @@
-import { readNonNegativeNumberEnv } from '../env.js';
+import { readNonNegativeNumberEnv, readPositiveNumberEnv } from '../env.js';
 
 describe('readNonNegativeNumberEnv', () => {
   afterEach(() => {
     delete process.env.TEST_NUMBER_ENV;
   });
 
-  it('usa fallback quando ausente ou vazia', () => {
+  it('usa fallback quando ausente, vazia ou só com espaços', () => {
     expect(readNonNegativeNumberEnv('TEST_NUMBER_ENV', 7)).toBe(7);
     process.env.TEST_NUMBER_ENV = '';
+    expect(readNonNegativeNumberEnv('TEST_NUMBER_ENV', 7)).toBe(7);
+    process.env.TEST_NUMBER_ENV = '   ';
     expect(readNonNegativeNumberEnv('TEST_NUMBER_ENV', 7)).toBe(7);
   });
 
@@ -21,5 +23,21 @@ describe('readNonNegativeNumberEnv', () => {
     expect(readNonNegativeNumberEnv('TEST_NUMBER_ENV', 7)).toBe(7);
     process.env.TEST_NUMBER_ENV = '-1';
     expect(readNonNegativeNumberEnv('TEST_NUMBER_ENV', 7)).toBe(7);
+  });
+});
+
+describe('readPositiveNumberEnv', () => {
+  afterEach(() => {
+    delete process.env.TEST_NUMBER_ENV;
+  });
+
+  it('usa o valor quando maior que zero', () => {
+    process.env.TEST_NUMBER_ENV = '500';
+    expect(readPositiveNumberEnv('TEST_NUMBER_ENV', 7)).toBe(500);
+  });
+
+  it('usa fallback quando zero', () => {
+    process.env.TEST_NUMBER_ENV = '0';
+    expect(readPositiveNumberEnv('TEST_NUMBER_ENV', 7)).toBe(7);
   });
 });

@@ -91,6 +91,48 @@ describe('OutboxRelay.tick', () => {
     expect(markPublished).not.toHaveBeenCalled();
   });
 
+  it('para de iniciar publicações quando o orçamento de tempo do lote se esgota', async () => {
+    const { store, published } = makeStore([event(1), event(2), event(3)]);
+    let now = 1_000_000;
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const add = vi.fn(async () => {
+      now += 6_000;
+    });
+    const relay = new OutboxRelay(store, { add } as unknown as Queue);
+
+    try {
+      await expect(relay.tick()).resolves.toBe(1);
+    } finally {
+      nowSpy.mockRestore();
+    }
+
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(published).toEqual([1n]);
+  });
+
+  it('erro ao marcar publicado não conta como falha de publicação', async () => {
+    const markPublished = vi.fn().mockRejectedValue(new Error('Transaction already closed'));
+    const markFailed = vi.fn();
+    const store: OutboxStore = {
+      withPendingBatch: vi.fn(async (_limit: number, handler) =>
+        handler({ events: [event(1), event(2)], markPublished, markFailed }),
+      ),
+    };
+    const add = vi.fn().mockResolvedValue(undefined);
+    const relay = new OutboxRelay(store, { add } as unknown as Queue);
+    const logError = vi
+      .spyOn((relay as unknown as { logger: Logger }).logger, 'error')
+      .mockImplementation(() => {});
+
+    await expect(relay.tick()).resolves.toBe(0);
+
+    expect(markFailed).not.toHaveBeenCalled();
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(logError).toHaveBeenCalledWith(
+      expect.objectContaining({ msg: 'outbox.mark_published_error', outboxId: '1' }),
+    );
+  });
+
   it('onModuleDestroy aguarda o tick em andamento terminar', async () => {
     let release!: () => void;
     const store: OutboxStore = {

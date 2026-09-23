@@ -77,7 +77,6 @@ describe('Outbox (e2e)', () => {
     try {
       const first = await api.post('/orders').send(body('Redis Fora 1')).expect(202);
 
-      // Relay pegou o evento e está preso no add, com a transação do lote aberta.
       await waitFor(async () => addSpy.mock.calls.length >= 1, {
         description: 'relay tentar publicar',
       });
