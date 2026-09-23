@@ -1,6 +1,8 @@
+export const INSUFFICIENT_STOCK_REASON = 'estoque insuficiente';
+
 export class InsufficientStockError extends Error {
   constructor() {
-    super('estoque insuficiente');
+    super(INSUFFICIENT_STOCK_REASON);
     this.name = 'InsufficientStockError';
   }
 }

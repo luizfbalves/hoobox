@@ -1,3 +1,4 @@
+import { OrderStatus } from '../../../generated/prisma/enums.js';
 import type { OrdersRepository } from '../domain/orders.repository.js';
 
 export function makeFakeOrdersRepository(
@@ -5,9 +6,12 @@ export function makeFakeOrdersRepository(
 ): OrdersRepository {
   return {
     createPending: vi.fn(),
-    processCreatedOrder: vi.fn().mockResolvedValue(undefined),
     findById: vi.fn(),
     findMany: vi.fn(),
+    findForProcessing: vi
+      .fn()
+      .mockResolvedValue({ id: 1, status: OrderStatus.PENDING, customerName: 'Ana' }),
+    reserveStockAndConfirm: vi.fn().mockResolvedValue('PROCESSED'),
     markFailed: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };

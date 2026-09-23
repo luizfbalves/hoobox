@@ -7,16 +7,16 @@ import {
   OrdersRepository,
   OrderSummaryRecord,
   PaginatedOrders,
+  type OrderForProcessing,
+  type StockReservationResult,
 } from "../domain/orders.repository.js";
 
 import { toOutboxRow } from "../../../core/outbox/domain-event.js";
 import { formatCents } from "../../../core/utils/money.js";
 import { PrismaService } from "../../../core/prisma/prisma.service.js";
 import { OrderStatus } from "../../../generated/prisma/enums.js";
-import {
-  ForcedProcessingError,
-  InsufficientStockError,
-} from "../domain/orders.errors.js";
+import { InsufficientStockError } from "../domain/orders.errors.js";
+import { aggregateQuantitiesByProduct } from "../domain/stock-reservation.js";
 
 type OrderWithCustomer = {
   id: number;
@@ -155,65 +155,58 @@ export class PrismaOrdersRepository implements OrdersRepository {
     }
   }
 
-  async processCreatedOrder(orderId: number): Promise<void> {
+  async findForProcessing(orderId: number): Promise<OrderForProcessing | null> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: { id: true, status: true, customer: { select: { name: true } } },
+    });
+    return order
+      ? { id: order.id, status: order.status, customerName: order.customer.name }
+      : null;
+  }
+
+  // Estratégia: lock da linha do pedido (idempotência em reentrega) + UPDATE atômico
+  // condicional por produto (nunca negativa, sem read-modify-write), em ordem de productId.
+  async reserveStockAndConfirm(orderId: number): Promise<StockReservationResult> {
     try {
-      await this.prisma.$transaction(async (tx) => {
-        const locked = await tx.$queryRaw<{ id: number }[]>`
-          SELECT id FROM orders
-          WHERE id = ${orderId} AND status = ${OrderStatus.PENDING}
-          FOR UPDATE
-        `;
-        if (locked.length === 0) {
-          return;
-        }
-
-        const order = await tx.order.findUnique({
-          where: { id: orderId },
-          include: {
-            customer: true,
-            items: true,
-          },
-        });
-        if (!order || order.status !== OrderStatus.PENDING) {
-          return;
-        }
-
-        if (order.customer.name.toLowerCase().includes("fail")) {
-          throw new ForcedProcessingError();
-        }
-
-        const quantityByProductId = new Map<number, number>();
-        for (const item of order.items) {
-          quantityByProductId.set(
-            item.productId,
-            (quantityByProductId.get(item.productId) ?? 0) + item.quantity,
-          );
-        }
-
-        for (const [productId, quantity] of quantityByProductId) {
-          const updated = await tx.product.updateMany({
-            where: {
-              id: productId,
-              stock: { gte: quantity },
-            },
-            data: {
-              stock: { decrement: quantity },
-            },
-          });
-          if (updated.count !== 1) {
-            throw new InsufficientStockError();
+      return await this.prisma.$transaction(
+        async (tx) => {
+          const locked = await tx.$queryRaw<{ id: number }[]>`
+            SELECT id FROM orders
+            WHERE id = ${orderId} AND status = ${OrderStatus.PENDING}
+            FOR UPDATE
+          `;
+          if (locked.length === 0) {
+            return "NOT_PENDING" as const;
           }
-        }
 
-        await tx.order.update({
-          where: { id: orderId },
-          data: { status: OrderStatus.PROCESSED },
-        });
-      });
+          const items = await tx.orderItem.findMany({
+            where: { orderId },
+            select: { productId: true, quantity: true },
+          });
+
+          for (const [productId, quantity] of aggregateQuantitiesByProduct(items)) {
+            const updated = await tx.product.updateMany({
+              where: { id: productId, stock: { gte: quantity } },
+              data: { stock: { decrement: quantity } },
+            });
+            if (updated.count !== 1) {
+              throw new InsufficientStockError();
+            }
+          }
+
+          await tx.order.update({
+            where: { id: orderId },
+            data: { status: OrderStatus.PROCESSED },
+          });
+          return "PROCESSED" as const;
+        },
+        { maxWait: 10_000, timeout: 10_000 },
+      );
     } catch (error) {
+      // Rollback já desfez decrementos parciais de outros produtos do pedido.
       if (error instanceof InsufficientStockError) {
-        await this.markFailed(orderId, error.message);
-        return;
+        return "INSUFFICIENT_STOCK";
       }
       throw error;
     }

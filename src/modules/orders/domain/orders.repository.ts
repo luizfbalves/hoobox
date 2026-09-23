@@ -47,10 +47,19 @@ export type PaginatedOrders = {
   totalPages: number;
 };
 
+export type OrderForProcessing = {
+  id: number;
+  status: OrderStatus;
+  customerName: string;
+};
+
+export type StockReservationResult = "PROCESSED" | "INSUFFICIENT_STOCK" | "NOT_PENDING";
+
 export interface OrdersRepository {
   createPending(draft: NewOrderDraft, buildEvents: BuildEvents): Promise<OrderRecord>;
-  processCreatedOrder(orderId: number): Promise<void>;
   findById(id: number): Promise<OrderDetailRecord>;
   findMany(page: number, limit: number): Promise<PaginatedOrders>;
+  findForProcessing(orderId: number): Promise<OrderForProcessing | null>;
+  reserveStockAndConfirm(orderId: number): Promise<StockReservationResult>;
   markFailed(orderId: number, reason: string): Promise<void>;
 }
