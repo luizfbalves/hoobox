@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import bcrypt from 'bcryptjs';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../src/generated/prisma/client.js';
 
@@ -17,6 +18,11 @@ const products = [
   { name: 'Relógio', priceCents: 34990 },
 ] as const;
 
+const users = [
+  { username: 'admin', password: 'admin123', role: 'ADMIN' },
+  { username: 'user', password: 'user123', role: 'USER' },
+] as const;
+
 async function main() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
@@ -28,31 +34,30 @@ async function main() {
   });
 
   try {
+    // update vazio: reiniciar o container não reseta estoque já consumido
     for (const product of products) {
-      const existing = await prisma.product.findFirst({
+      await prisma.product.upsert({
         where: { name: product.name },
+        update: {},
+        create: { ...product, stock: INITIAL_STOCK },
       });
-
-      if (existing) {
-        await prisma.product.update({
-          where: { id: existing.id },
-          data: {
-            priceCents: product.priceCents,
-            stock: INITIAL_STOCK,
-          },
-        });
-      } else {
-        await prisma.product.create({
-          data: {
-            name: product.name,
-            priceCents: product.priceCents,
-            stock: INITIAL_STOCK,
-          },
-        });
-      }
     }
 
-    console.log(`Seed: ${products.length} produtos garantidos (estoque ${INITIAL_STOCK}).`);
+    for (const user of users) {
+      await prisma.user.upsert({
+        where: { username: user.username },
+        update: {},
+        create: {
+          username: user.username,
+          passwordHash: await bcrypt.hash(user.password, 10),
+          role: user.role,
+        },
+      });
+    }
+
+    console.log(
+      `Seed: ${products.length} produtos e ${users.length} usuários garantidos.`,
+    );
   } finally {
     await prisma.$disconnect();
   }
