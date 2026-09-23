@@ -205,7 +205,11 @@ export class PrismaOrdersRepository implements OrdersRepository {
     }
   }
 
-  async requeueFailed(orderId: number, buildEvents: BuildEvents): Promise<RequeueResult> {
+  async requeueFailed(
+    orderId: number,
+    correlationId: string,
+    buildEvents: BuildEvents,
+  ): Promise<RequeueResult> {
     return this.prisma.$transaction(async (tx) => {
       const exists = await tx.order.findUnique({
         where: { id: orderId },
@@ -217,7 +221,7 @@ export class PrismaOrdersRepository implements OrdersRepository {
 
       const updated = await tx.order.updateMany({
         where: { id: orderId, status: OrderStatus.FAILED },
-        data: { status: OrderStatus.PENDING, failureReason: null },
+        data: { status: OrderStatus.PENDING, failureReason: null, correlationId },
       });
       if (updated.count === 0) {
         return "NOT_FAILED" as const;

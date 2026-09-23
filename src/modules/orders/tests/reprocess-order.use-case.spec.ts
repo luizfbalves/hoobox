@@ -6,7 +6,9 @@ import { makeFakeOrdersRepository } from './fake-orders-repository.js';
 
 describe('ReprocessOrderUseCase', () => {
   it('reenfileira pedido FAILED com novo OrderCreatedEvent', async () => {
-    const requeueFailed = vi.fn(async (_id: number, _build: BuildEvents) => 'REQUEUED' as const);
+    const requeueFailed = vi.fn(
+      async (_id: number, _correlationId: string, _build: BuildEvents) => 'REQUEUED' as const,
+    );
     const useCase = new ReprocessOrderUseCase(makeFakeOrdersRepository({ requeueFailed }));
 
     await expect(useCase.execute(7, 'corr-r')).resolves.toEqual({
@@ -15,7 +17,8 @@ describe('ReprocessOrderUseCase', () => {
       correlationId: 'corr-r',
     });
 
-    const events = requeueFailed.mock.calls[0]![1](7);
+    expect(requeueFailed.mock.calls[0]![1]).toBe('corr-r');
+    const events = requeueFailed.mock.calls[0]![2](7);
     expect(events[0]).toBeInstanceOf(OrderCreatedEvent);
     expect(events[0]!.toPayload()).toEqual({ orderId: 7, correlationId: 'corr-r' });
   });

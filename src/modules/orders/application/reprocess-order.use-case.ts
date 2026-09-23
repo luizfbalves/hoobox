@@ -21,7 +21,7 @@ export class ReprocessOrderUseCase {
   ) {}
 
   async execute(orderId: number, correlationId: string) {
-    const result = await this.orders.requeueFailed(orderId, (id) => [
+    const result = await this.orders.requeueFailed(orderId, correlationId, (id) => [
       new OrderCreatedEvent(id, correlationId),
     ]);
 

@@ -63,5 +63,9 @@ export interface OrdersRepository {
   findForProcessing(orderId: number): Promise<OrderForProcessing | null>;
   reserveStockAndConfirm(orderId: number): Promise<StockReservationResult>;
   markFailed(orderId: number, reason: string): Promise<void>;
-  requeueFailed(orderId: number, buildEvents: BuildEvents): Promise<RequeueResult>;
+  requeueFailed(
+    orderId: number,
+    correlationId: string,
+    buildEvents: BuildEvents,
+  ): Promise<RequeueResult>;
 }
