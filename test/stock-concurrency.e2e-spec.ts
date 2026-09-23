@@ -8,10 +8,16 @@ import {
   type OrdersRepository,
 } from '../src/modules/orders/domain/orders.repository.js';
 import { OrderCreatedProcessor } from '../src/modules/orders/infra/order-created.processor.js';
+import { loginAs } from './helpers/auth.js';
 import { createE2eApp } from './helpers/create-e2e-app.js';
 import { http, type Api } from './helpers/http.js';
 import { resetOrdersQueue } from './helpers/reset-orders-queue.js';
-import { createPendingOrder, getTestPrisma, resetOrdersData } from './helpers/test-db.js';
+import {
+  createPendingOrder,
+  getTestPrisma,
+  resetOrdersData,
+  seedTestUsers,
+} from './helpers/test-db.js';
 import { waitForOrderSettled } from './helpers/wait-for-order-status.js';
 
 describe('Reserva de estoque sob concorrência (e2e)', () => {
@@ -30,7 +36,8 @@ describe('Reserva de estoque sob concorrência (e2e)', () => {
     repository = app.get(ORDERS_REPOSITORY);
     ordersQueue = app.get(getQueueToken(ORDERS_QUEUE));
     ordersWorker = app.get(OrderCreatedProcessor).worker;
-    api = http(app);
+    await seedTestUsers(prisma);
+    api = http(app, await loginAs(app, 'user'));
   });
 
   beforeEach(async () => {

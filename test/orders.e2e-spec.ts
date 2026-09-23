@@ -8,12 +8,14 @@ import {
   ORDERS_QUEUE,
 } from '../src/core/queue/queue.constants.js';
 import { OrderCreatedProcessor } from '../src/modules/orders/infra/order-created.processor.js';
+import { loginAs } from './helpers/auth.js';
 import { createE2eApp } from './helpers/create-e2e-app.js';
 import { http, type Api } from './helpers/http.js';
 import {
   getTestPrisma,
   resetOrdersData,
   seedMinimalProducts,
+  seedTestUsers,
 } from './helpers/test-db.js';
 import { resetOrdersQueue } from './helpers/reset-orders-queue.js';
 import { waitFor } from './helpers/wait-for.js';
@@ -37,7 +39,8 @@ describe('Orders (e2e)', () => {
     prisma = getTestPrisma();
     ordersQueue = app.get(getQueueToken(ORDERS_QUEUE));
     ordersWorker = app.get(OrderCreatedProcessor).worker;
-    api = http(app);
+    await seedTestUsers(prisma);
+    api = http(app, await loginAs(app, 'user'));
   });
 
   beforeEach(async () => {

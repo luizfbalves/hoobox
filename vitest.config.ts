@@ -19,6 +19,8 @@ export default defineConfig({
         'src/modules/orders/domain/forced-failure.ts',
         'src/core/logging/correlation-id.ts',
         'src/core/utils/env.ts',
+        'src/modules/auth/bearer-token.ts',
+        'src/modules/auth/roles.guard.ts',
       ],
       thresholds: {
         lines: 100,

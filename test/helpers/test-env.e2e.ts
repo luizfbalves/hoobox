@@ -44,3 +44,4 @@ process.env.ORDER_QUEUE_BACKOFF_MS = state.orderQueueBackoffMs;
 process.env.LOG_LEVEL = 'silent';
 process.env.OUTBOX_POLL_MS = '50';
 process.env.ORDER_WORKER_CONCURRENCY = '4';
+process.env.JWT_SECRET = 'test-secret';
