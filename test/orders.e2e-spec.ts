@@ -8,7 +8,7 @@ import {
   ORDER_CREATED_JOB,
   ORDERS_QUEUE,
 } from '../src/core/queue/queue.constants.js';
-import { OrderCreatedProcessor } from '../src/modules/orders/order-created.processor.js';
+import { OrderCreatedProcessor } from '../src/modules/orders/infra/order-created.processor.js';
 import { createE2eApp } from './helpers/create-e2e-app.js';
 import {
   getTestPrisma,

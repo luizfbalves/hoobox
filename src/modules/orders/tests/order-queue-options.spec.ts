@@ -1,4 +1,4 @@
-import { buildOrderCreatedJobOptions } from '../order-queue-options.js';
+import { buildOrderCreatedJobOptions } from '../infra/order-queue-options.js';
 
 describe('buildOrderCreatedJobOptions', () => {
   afterEach(() => {

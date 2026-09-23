@@ -7,9 +7,9 @@ import {
   Post,
   Query,
 } from "@nestjs/common";
-import { CreateOrderDto } from "../dtos/create-order.dto.js";
-import { ListOrdersQueryDto } from "../dtos/list-orders-query.dto.js";
-import { OrdersService } from "./orders.service.js";
+import { CreateOrderDto } from "./dtos/create-order.dto.js";
+import { ListOrdersQueryDto } from "./dtos/list-orders-query.dto.js";
+import { OrdersService } from "../application/orders.service.js";
 
 @Controller("orders")
 export class OrdersController {

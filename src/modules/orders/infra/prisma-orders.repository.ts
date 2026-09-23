@@ -5,20 +5,20 @@ import {
   OrdersRepository,
   OrderSummaryRecord,
   PaginatedOrders,
-} from "./orders.repository.js";
+} from "../domain/orders.repository.js";
 
-import { CreateOrderDto } from "../dtos/create-order.dto.js";
-import { formatCents, toCents } from "../../core/utils/money.js";
+import { CreateOrderDto } from "../http/dtos/create-order.dto.js";
+import { formatCents, toCents } from "../../../core/utils/money.js";
 import {
   assertOrderTotalWithinLimit,
   calculateOrderTotalCents,
-} from "./order-total.js";
-import { PrismaService } from "../../core/prisma/prisma.service.js";
-import { OrderStatus } from "../../generated/prisma/enums.js";
+} from "../domain/order-total.js";
+import { PrismaService } from "../../../core/prisma/prisma.service.js";
+import { OrderStatus } from "../../../generated/prisma/enums.js";
 import {
   ForcedProcessingError,
   InsufficientStockError,
-} from "./orders.errors.js";
+} from "../domain/orders.errors.js";
 
 type OrderWithCustomer = {
   id: number;

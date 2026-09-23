@@ -3,7 +3,7 @@ import { MAX_CENTS } from '../../../core/utils/money.js';
 import {
   assertOrderTotalWithinLimit,
   calculateOrderTotalCents,
-} from '../order-total.js';
+} from '../domain/order-total.js';
 
 describe('calculateOrderTotalCents', () => {
   it('soma várias linhas com arredondamento por item', () => {

@@ -1,7 +1,7 @@
 import { Job } from 'bullmq';
 import { ORDER_CREATED_JOB } from '../../../core/queue/queue.constants.js';
-import type { OrdersRepository } from '../orders.repository.js';
-import { OrderCreatedProcessor } from '../order-created.processor.js';
+import type { OrdersRepository } from '../domain/orders.repository.js';
+import { OrderCreatedProcessor } from '../infra/order-created.processor.js';
 
 type OrderCreatedJob = Job<{ orderId: number }>;
 

@@ -1,5 +1,5 @@
-import { OrderStatus } from "../../generated/prisma/enums.js";
-import { CreateOrderDto } from "../dtos/create-order.dto.js";
+import { OrderStatus } from "../../../generated/prisma/enums.js";
+import { CreateOrderDto } from "../http/dtos/create-order.dto.js";
 
 export const ORDERS_REPOSITORY = Symbol("ORDERS_REPOSITORY");
 

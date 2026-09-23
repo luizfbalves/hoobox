@@ -4,11 +4,11 @@ import { Job } from "bullmq";
 import {
   ORDER_CREATED_JOB,
   ORDERS_QUEUE,
-} from "../../core/queue/queue.constants.js";
+} from "../../../core/queue/queue.constants.js";
 import {
   ORDERS_REPOSITORY,
   type OrdersRepository,
-} from "./orders.repository.js";
+} from "../domain/orders.repository.js";
 import { resolveProcessingDelayMs, sleep } from "./processing-delay.js";
 
 type OrderCreatedPayload = { orderId: number };

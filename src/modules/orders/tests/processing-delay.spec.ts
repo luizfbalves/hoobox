@@ -1,4 +1,4 @@
-import { resolveProcessingDelayMs } from '../processing-delay.js';
+import { resolveProcessingDelayMs } from '../infra/processing-delay.js';
 
 describe('resolveProcessingDelayMs', () => {
   afterEach(() => {
@@ -29,7 +29,7 @@ describe('resolveProcessingDelayMs', () => {
 
 describe('sleep', () => {
   it('aguarda o tempo informado', async () => {
-    const { sleep } = await import('../processing-delay.js');
+    const { sleep } = await import('../infra/processing-delay.js');
     const start = Date.now();
     await sleep(15);
     expect(Date.now() - start).toBeGreaterThanOrEqual(10);

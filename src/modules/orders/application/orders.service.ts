@@ -1,17 +1,17 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { InjectQueue } from "@nestjs/bullmq";
 import { Queue } from "bullmq";
-import { CreateOrderDto } from "../dtos/create-order.dto.js";
-import { ListOrdersQueryDto } from "../dtos/list-orders-query.dto.js";
+import { CreateOrderDto } from "../http/dtos/create-order.dto.js";
+import { ListOrdersQueryDto } from "../http/dtos/list-orders-query.dto.js";
 import {
   ORDERS_REPOSITORY,
   type OrdersRepository,
-} from "./orders.repository.js";
+} from "../domain/orders.repository.js";
 import {
   ORDER_CREATED_JOB,
   ORDERS_QUEUE,
-} from "../../core/queue/queue.constants.js";
-import { buildOrderCreatedJobOptions } from "./order-queue-options.js";
+} from "../../../core/queue/queue.constants.js";
+import { buildOrderCreatedJobOptions } from "../infra/order-queue-options.js";
 
 @Injectable()
 export class OrdersService {

@@ -11,10 +11,10 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: [
-        'src/modules/orders/order-total.ts',
-        'src/modules/orders/processing-delay.ts',
-        'src/modules/orders/order-queue-options.ts',
-        'src/modules/orders/order-created.processor.ts',
+        'src/modules/orders/domain/order-total.ts',
+        'src/modules/orders/infra/processing-delay.ts',
+        'src/modules/orders/infra/order-queue-options.ts',
+        'src/modules/orders/infra/order-created.processor.ts',
       ],
       thresholds: {
         lines: 100,
