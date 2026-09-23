@@ -6,6 +6,8 @@ import { configureApp } from "./app.setup.js";
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   configureApp(app);
+  // SIGTERM do container dispara onModuleDestroy: relay drena o tick, worker e Prisma fecham.
+  app.enableShutdownHooks();
   await app.listen(process.env.PORT ?? 3333);
 }
 await bootstrap();

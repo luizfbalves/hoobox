@@ -39,6 +39,7 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(OutboxRelay.name);
   private timer?: NodeJS.Timeout;
   private running = false;
+  private inFlight?: Promise<number>;
 
   constructor(
     @Inject(OUTBOX_STORE) private readonly store: OutboxStore,
@@ -50,8 +51,10 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
     this.timer = setInterval(() => void this.tick(), intervalMs);
   }
 
-  onModuleDestroy(): void {
+  // Espera o tick em andamento para não fechar Prisma/fila no meio de um lote.
+  async onModuleDestroy(): Promise<void> {
     clearInterval(this.timer);
+    await this.inFlight;
   }
 
   tick(): Promise<number> {
@@ -59,7 +62,8 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
       return Promise.resolve(0);
     }
     this.running = true;
-    return this.runBatch();
+    this.inFlight = this.runBatch();
+    return this.inFlight;
   }
 
   // Primeira falha interrompe o lote: com o Redis fora, cada publicação pode levar até

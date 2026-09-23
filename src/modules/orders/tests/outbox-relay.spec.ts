@@ -91,6 +91,32 @@ describe('OutboxRelay.tick', () => {
     expect(markPublished).not.toHaveBeenCalled();
   });
 
+  it('onModuleDestroy aguarda o tick em andamento terminar', async () => {
+    let release!: () => void;
+    const store: OutboxStore = {
+      withPendingBatch: vi.fn(
+        () => new Promise<never>((resolve) => {
+          release = () => resolve(0 as never);
+        }),
+      ),
+    };
+    const relay = new OutboxRelay(store, { add: vi.fn() } as unknown as Queue);
+
+    const tick = relay.tick();
+    let destroyed = false;
+    const destroy = relay.onModuleDestroy().then(() => {
+      destroyed = true;
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(destroyed).toBe(false);
+
+    release();
+    await tick;
+    await destroy;
+    expect(destroyed).toBe(true);
+  });
+
   it('não sobrepõe execuções', async () => {
     let release!: () => void;
     const store: OutboxStore = {
