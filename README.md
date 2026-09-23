@@ -52,6 +52,8 @@ npm run prisma:seed
 npm run start:dev        # logs legíveis via pino-pretty
 ```
 
+Se o volume MySQL veio de uma versão anterior (antes dos nomes únicos), recrie com `docker compose down -v` antes de subir.
+
 ## Variáveis de ambiente
 
 | Variável | Padrão | Uso |
@@ -120,9 +122,9 @@ npm run test:all
 | Suíte | Cobre |
 |---|---|
 | Unit | total do pedido, decisões do `ProcessOrderUseCase`, retry/falha no processor, relay do outbox (falha de publicação), `RolesGuard`, correlation ID, reprocessamento |
-| `orders.e2e` | POST→PENDING, outbox→job, PROCESSED com débito, estoque insuficiente sem retry, falha simulada com 3 tentativas, paginação, clientes simultâneos |
+| `orders.e2e` | POST→PENDING, outbox→job, PROCESSED com débito, estoque insuficiente sem retry, falha simulada com 3 tentativas, paginação (desempate por id), clientes simultâneos |
 | `stock-concurrency.e2e` | 10 reservas simultâneas com estoque 5, ausência de deadlock com ordens inversas, retry e entregas duplicadas sem débito duplo, fluxo HTTP concorrente |
-| `outbox.e2e` | evento órfão (crash entre commit e fila) é publicado e processado |
+| `outbox.e2e` | evento órfão (crash entre commit e fila) é publicado e processado; com publish travado (Redis fora), `POST /orders` segue respondendo 202 rápido, a falha fica em `attempts`/`last_error` e os pedidos são processados quando o Redis volta |
 | `reprocess.e2e` | reprocessamento ADMIN, 403, 404, 409 e corrida entre dois reprocessamentos |
 | `auth.e2e` | login, 401 sem token, token forjado, expirado e `alg: none` |
 | `schema.e2e` | CHECKs, unicidade e estoque inicial |

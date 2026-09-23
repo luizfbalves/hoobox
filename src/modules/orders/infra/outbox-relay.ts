@@ -32,8 +32,9 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-// Publica eventos do outbox no BullMQ (at-least-once). Duplicatas são absorvidas
-// pelo jobId fixo e pela idempotência do worker.
+// Publica eventos do outbox no BullMQ (at-least-once). O jobId deduplica enquanto o job
+// ainda está no Redis; depois de concluído (removeOnComplete), duplicatas são absorvidas
+// pela guarda PENDING/lock do worker.
 @Injectable()
 export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(OutboxRelay.name);
