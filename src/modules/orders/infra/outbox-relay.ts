@@ -14,6 +14,24 @@ import { buildOrderCreatedJobOptions } from './order-queue-options.js';
 
 const OUTBOX_BATCH_SIZE = 50;
 
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`publish timeout after ${ms}ms`));
+    }, ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 // Publica eventos do outbox no BullMQ (at-least-once). Duplicatas são absorvidas
 // pelo jobId fixo e pela idempotência do worker.
 @Injectable()
@@ -47,10 +65,13 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
         for (const event of batch.events) {
           const correlationId = (event.payload as { correlationId?: string })?.correlationId;
           try {
-            await this.queue.add(
-              event.eventType,
-              event.payload,
-              buildOrderCreatedJobOptions(event.id),
+            await withTimeout(
+              this.queue.add(
+                event.eventType,
+                event.payload,
+                buildOrderCreatedJobOptions(event.id),
+              ),
+              readNonNegativeNumberEnv('OUTBOX_PUBLISH_TIMEOUT_MS', 5000),
             );
             await batch.markPublished(event.id);
             published++;

@@ -90,4 +90,23 @@ describe('OutboxRelay.tick', () => {
 
     await expect(relay.tick()).resolves.toBe(0);
   });
+
+  it('publish que nunca resolve estoura timeout, marca falha e segue o lote', async () => {
+    process.env.OUTBOX_PUBLISH_TIMEOUT_MS = '20';
+    try {
+      const { store, published, failed } = makeStore([event(1), event(2)]);
+      const add = vi
+        .fn()
+        .mockImplementationOnce(() => new Promise(() => {}))
+        .mockResolvedValueOnce(undefined);
+      const relay = new OutboxRelay(store, { add } as unknown as Queue);
+
+      await expect(relay.tick()).resolves.toBe(1);
+
+      expect(failed).toEqual([{ id: 1n, error: 'publish timeout after 20ms' }]);
+      expect(published).toEqual([2n]);
+    } finally {
+      delete process.env.OUTBOX_PUBLISH_TIMEOUT_MS;
+    }
+  });
 });
